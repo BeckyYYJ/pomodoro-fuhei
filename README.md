@@ -1,5 +1,7 @@
 # 番茄钟 + 项目看板
 
+[![Latest Release](https://img.shields.io/github/v/release/BeckyYYJ/pomodoro-fuhei)](https://github.com/BeckyYYJ/pomodoro-fuhei/releases/latest)
+
 一个基于 Python、PySide6 和 SQLite 的本地桌面效率工具，将番茄工作法、项目管理和统计分析整合在一起。AI开发自用实用小软件。
 
 ## 功能
