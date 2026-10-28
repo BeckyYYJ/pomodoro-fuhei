@@ -64,6 +64,10 @@ class SettingsWidget(QWidget):
         self._font_size.addItem("标准（14 pt）", 14)
         self._font_size.addItem("大（16 pt）", 16)
         form.addRow("字体大小", self._font_size)
+        self._theme = QComboBox()
+        self._theme.addItem("浅色", "light")
+        self._theme.addItem("深色", "dark")
+        form.addRow("界面主题", self._theme)
         layout.addLayout(form)
 
         sound_row = QHBoxLayout()
@@ -94,8 +98,9 @@ class SettingsWidget(QWidget):
         project_buttons.addStretch(1)
         layout.addLayout(project_buttons)
 
-        hint = QLabel("音效和时长修改后点保存生效")
-        hint.setStyleSheet("color: #929AA6; font-size: 13px;")
+        hint = QLabel("主题、音效和时长修改后点击保存生效")
+        hint.setProperty("role", "muted")
+        hint.setStyleSheet("font-size: 13px;")
         layout.addWidget(hint)
 
         self._save_button = QPushButton("保存")
@@ -106,6 +111,9 @@ class SettingsWidget(QWidget):
             "QPushButton:hover { background: #C0392B; }"
         )
         self._save_button.clicked.connect(self.save)
+        self._feedback_timer = QTimer(self)
+        self._feedback_timer.setSingleShot(True)
+        self._feedback_timer.timeout.connect(lambda: self._save_button.setText("保存"))
         layout.addWidget(self._save_button)
         layout.addStretch(1)
 
@@ -123,6 +131,7 @@ class SettingsWidget(QWidget):
         font_size = int(settings.get("ui_font_size", 14))
         font_index = self._font_size.findData(font_size)
         self._font_size.setCurrentIndex(font_index if font_index >= 0 else 1)
+        self._theme.setCurrentIndex(max(0, self._theme.findData(settings.get("ui_theme", "dark"))))
 
     def save(self):
         database.save_settings(
@@ -134,11 +143,12 @@ class SettingsWidget(QWidget):
                 "sound_effect": self._sound.currentData(),
                 "ui_margin": self._margin.currentData(),
                 "ui_font_size": self._font_size.currentData(),
+                "ui_theme": self._theme.currentData(),
             }
         )
         self.saved.emit()
         self._save_button.setText("已保存")
-        QTimer.singleShot(1500, lambda: self._save_button.setText("保存"))
+        self._feedback_timer.start(1500)
 
     def _on_test_sound(self):
         sound.play(self._sound.currentData())

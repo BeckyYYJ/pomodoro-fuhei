@@ -2,7 +2,9 @@ from datetime import date, timedelta
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QPainter
-from PySide6.QtWidgets import QWidget
+from PySide6.QtWidgets import QApplication, QWidget
+
+from ui_theme import palette_for
 
 CELL = 13
 GAP = 3
@@ -38,6 +40,9 @@ class HeatmapWidget(QWidget):
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
+        theme = QApplication.instance().property("ui_theme") or "dark"
+        p = palette_for(theme)
+        colors = ([p["border"]] + COLORS[1:]) if theme == "dark" else COLORS
         today = date.today()
         start = today - timedelta(days=self._days - 1)
         start -= timedelta(days=start.weekday())
@@ -49,7 +54,7 @@ class HeatmapWidget(QWidget):
         for col in range(columns):
             day = start + timedelta(days=col * 7)
             if day.day <= 7:
-                painter.setPen(QColor("#7F8C8D"))
+                painter.setPen(QColor(p["muted"]))
                 painter.drawText(LEFT + col * (CELL + GAP), 12, f"{day.month}月")
 
         painter.setPen(Qt.NoPen)
@@ -57,7 +62,7 @@ class HeatmapWidget(QWidget):
             for row in range(7):
                 day = start + timedelta(days=col * 7 + row)
                 count = self._data.get(day.isoformat(), 0)
-                painter.setBrush(QColor(COLORS[_level(count)]))
+                painter.setBrush(QColor(colors[_level(count)]))
                 painter.drawRoundedRect(
                     LEFT + col * (CELL + GAP),
                     TOP + row * (CELL + GAP),
@@ -68,11 +73,11 @@ class HeatmapWidget(QWidget):
                 )
 
         legend_y = TOP + 7 * CELL + 6 * GAP
-        painter.setPen(QColor("#7F8C8D"))
+        painter.setPen(QColor(p["muted"]))
         painter.drawText(self.width() - 160, legend_y + 13, "少")
         x = self.width() - 144
         for level in range(5):
-            painter.setBrush(QColor(COLORS[level]))
+            painter.setBrush(QColor(colors[level]))
             painter.drawRoundedRect(x, legend_y + 2, 10, 10, 2, 2)
             x += 14
         painter.drawText(x + 2, legend_y + 13, "多")

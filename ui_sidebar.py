@@ -13,11 +13,11 @@ from PySide6.QtWidgets import (
 
 import database
 
-_SECTION_STYLE = "font-size: 12px; color: #7F8C8D; padding: 2px 8px;"
+_SECTION_STYLE = "font-size: 12px; padding: 2px 8px;"
 _ITEM_STYLE = (
     "QListWidget { border: none; background: transparent; font-size: 14px; }"
     "QListWidget::item { padding: 6px 10px; border-radius: 6px; }"
-    "QListWidget::item:selected { background: #E8ECEF; color: #E74C3C; font-weight: bold; }"
+    "QListWidget::item:selected { font-weight: bold; }"
 )
 
 FUNCTION_KEYS = [("计时", "timer"), ("统计", "stats"), ("设置", "settings")]
@@ -30,8 +30,9 @@ class SidebarWidget(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedWidth(220)
-        self.setStyleSheet("background: #15181D; border: 1px solid #2D333C; border-radius: 10px;")
+        self.setFixedWidth(190)
+        self.setObjectName("sidebar")
+        self.setAttribute(Qt.WA_StyledBackground, True)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(14, 16, 14, 16)
@@ -72,9 +73,8 @@ class SidebarWidget(QWidget):
             if project["id"] == database.DEFAULT_PROJECT_ID:
                 item.setToolTip("默认项目")
             self.project_list.addItem(item)
-        index = self.project_list.findData(
-            current_id, Qt.UserRole
-        ) if current_id is not None else -1
+        index = next((i for i in range(self.project_list.count())
+                      if self.project_list.item(i).data(Qt.UserRole) == current_id), -1)
         self.project_list.setCurrentRow(index if index >= 0 else -1)
         self.project_list.blockSignals(False)
 
@@ -82,7 +82,7 @@ class SidebarWidget(QWidget):
         index = self.project_list.currentRow()
         if index >= 0:
             self.project_list.blockSignals(True)
-            self.project_list.clearSelection()
+            self.project_list.setCurrentRow(-1)
             self.project_list.blockSignals(False)
         for i in range(self.function_list.count()):
             if self.function_list.item(i).data(Qt.UserRole) == key:
@@ -93,7 +93,7 @@ class SidebarWidget(QWidget):
         index = self.function_list.currentRow()
         if index >= 0:
             self.function_list.blockSignals(True)
-            self.function_list.clearSelection()
+            self.function_list.setCurrentRow(-1)
             self.function_list.blockSignals(False)
         for i in range(self.project_list.count()):
             if self.project_list.item(i).data(Qt.UserRole) == project_id:
@@ -106,7 +106,7 @@ class SidebarWidget(QWidget):
         key = self.function_list.item(row).data(Qt.UserRole)
         if self.project_list.currentRow() >= 0:
             self.project_list.blockSignals(True)
-            self.project_list.clearSelection()
+            self.project_list.setCurrentRow(-1)
             self.project_list.blockSignals(False)
         self.function_selected.emit(key)
 
@@ -116,7 +116,7 @@ class SidebarWidget(QWidget):
         pid = self.project_list.item(row).data(Qt.UserRole)
         if self.function_list.currentRow() >= 0:
             self.function_list.blockSignals(True)
-            self.function_list.clearSelection()
+            self.function_list.setCurrentRow(-1)
             self.function_list.blockSignals(False)
         self.project_selected.emit(pid)
 

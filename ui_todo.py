@@ -1,5 +1,5 @@
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QFont, QFontMetrics
+from PySide6.QtGui import QFont, QFontMetrics
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -21,17 +21,11 @@ from PySide6.QtWidgets import (
 )
 
 import database
-from ui_board import PRIORITY_COLORS
+from ui_card_dialog import CardDialog as _CardDialog
 
-_COLUMN_STYLE = (
-    "QListWidget { border: 1px solid #2D333C; border-radius: 8px;"
-    " background: #171A20; font-size: 14px; color: #E8ECF1; }"
-    "QListWidget::item { padding: 10px 10px; }"
-    "QListWidget::item:selected { background: #303A48; color: #FFFFFF;"
-    " font-weight: bold; }"
-)
-_HEADER_STYLE = "font-size: 17px; font-weight: bold; color: #F4F6F8;"
-_HINT_STYLE = "font-size: 13px; color: #929AA6;"
+_COLUMN_STYLE = "QListWidget { font-size: 14px; } QListWidget::item { padding: 10px; }"
+_HEADER_STYLE = "font-size: 17px; font-weight: bold;"
+_HINT_STYLE = "font-size: 13px;"
 
 
 def _elide(text, width):
@@ -50,12 +44,12 @@ class _StepWidget(QWidget):
         text_box = QVBoxLayout()
         text_box.setSpacing(2)
         content = QLabel(item["content"])
-        content.setStyleSheet("font-size: 14px; color: #F4F6F8;")
+        content.setStyleSheet("font-size: 14px;")
         content.setToolTip(item["content"])
         text_box.addWidget(content)
         if item["note"]:
             note = QLabel(_elide(item["note"], 220))
-            note.setStyleSheet("font-size: 12px; color: #929AA6;")
+            note.setStyleSheet("font-size: 12px;")
             note.setToolTip(item["note"])
             text_box.addWidget(note)
         layout.addLayout(text_box, 1)
@@ -81,40 +75,6 @@ class _StepWidget(QWidget):
     def _apply(self, combo, func, item_id):
         func(item_id, combo.currentData())
         self._on_changed()
-
-
-class _CardDialog(QDialog):
-    def __init__(self, card=None, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("编辑待办" if card else "新建待办")
-        form = QFormLayout(self)
-
-        self._title = QLineEdit(card["title"] if card else "")
-        form.addRow("标题", self._title)
-
-        self._note = QLineEdit(card["note"] if card else "")
-        self._note.setPlaceholderText("备注（可选）")
-        form.addRow("备注", self._note)
-
-        self._priority = QComboBox()
-        self._priority.addItem("低", database.PRIORITY_LOW)
-        self._priority.addItem("中", database.PRIORITY_MED)
-        self._priority.addItem("高", database.PRIORITY_HIGH)
-        if card:
-            self._priority.setCurrentIndex(self._priority.findData(card["priority"]))
-        form.addRow("优先级", self._priority)
-
-        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        form.addRow(buttons)
-
-    def values(self):
-        return {
-            "title": self._title.text().strip(),
-            "note": self._note.text().strip(),
-            "priority": self._priority.currentData(),
-        }
 
 
 class TodoWidget(QWidget):
@@ -189,7 +149,7 @@ class TodoWidget(QWidget):
         col3_label.setStyleSheet(_HEADER_STYLE)
         col3.addWidget(col3_label)
         self._card_info = QLabel()
-        self._card_info.setStyleSheet("font-size: 13px; color: #929AA6;")
+        self._card_info.setStyleSheet("font-size: 13px;")
         col3.addWidget(self._card_info)
         body_widget = QWidget()
         self._steps_body = QVBoxLayout(body_widget)
@@ -294,10 +254,10 @@ class TodoWidget(QWidget):
                 if card["section_id"] != self._section_id:
                     continue
                 status_name = database.STATUS_NAMES[card["status"]]
-                label = f"{card['title']}　[{status_name}] {done_label(card)}"
+                priority_name = database.PRIORITY_NAMES[card["priority"]]
+                label = f"{card['title']}　[{status_name}] [{priority_name}优先级] {done_label(card)}"
                 item = QListWidgetItem(label)
                 item.setData(Qt.UserRole, card["id"])
-                item.setForeground(QColor(PRIORITY_COLORS[card["priority"]]))
                 item.setToolTip(
                     f"{card['title']}\n优先级：{database.PRIORITY_NAMES[card['priority']]}"
                     f"\n状态：{status_name}"
@@ -335,9 +295,7 @@ class TodoWidget(QWidget):
             data = dialog.values()
             if not data["title"]:
                 return
-            database.update_card(
-                card_id, data["title"], data["note"], data["priority"]
-            )
+            dialog.save_card()
             self.refresh_cards()
         elif chosen in (todo_action, doing_action, done_action):
             status = {
@@ -359,15 +317,14 @@ class TodoWidget(QWidget):
         if self._section_id is None:
             QMessageBox.warning(self, "提示", "请先在左侧选择一个分类")
             return
-        dialog = _CardDialog(parent=self)
+        dialog = _CardDialog(parent=self, project_id=self._project_id)
+        dialog._section.setCurrentIndex(dialog._section.findData(self._section_id))
         if not dialog.exec():
             return
         data = dialog.values()
         if not data["title"]:
             return
-        card_id = database.add_card(
-            self._section_id, data["title"], data["note"], data["priority"]
-        )
+        card_id = dialog.save_card()
         self._card = self._find_card(card_id)
         self.refresh_cards()
 

@@ -11,6 +11,7 @@ from PySide6.QtCharts import (
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import (
+    QApplication,
     QComboBox,
     QHBoxLayout,
     QHeaderView,
@@ -23,6 +24,7 @@ from PySide6.QtWidgets import (
 
 import database
 from heatmap import HeatmapWidget
+from ui_theme import palette_for
 
 
 class StatsWidget(QWidget):
@@ -31,6 +33,7 @@ class StatsWidget(QWidget):
         self._locked_project_id = None
         self._build_ui()
         self.refresh()
+        self.apply_theme()
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
@@ -67,7 +70,8 @@ class StatsWidget(QWidget):
             inner.setSpacing(2)
             inner.addWidget(label)
             cap = QLabel(caption, alignment=Qt.AlignCenter)
-            cap.setStyleSheet("font-size: 13px; color: #929AA6;")
+            cap.setStyleSheet("font-size: 13px;")
+            cap.setProperty("role", "muted")
             inner.addWidget(cap)
             cards.addWidget(card, 1)
         layout.addLayout(cards)
@@ -112,9 +116,25 @@ class StatsWidget(QWidget):
         view = QChartView(chart)
         view.setRenderHint(QPainter.Antialiasing)
         view.setMinimumHeight(180)
-        view.setStyleSheet("background: #171A20; border: 1px solid #2D333C; border-radius: 8px;")
         view._bar_color = color
         return chart, series, axis_x, axis_y, view
+
+    def apply_theme(self):
+        name = QApplication.instance().property("ui_theme") or "dark"
+        p = palette_for(name)
+        for chart, series, color, axes in (
+            (self._chart, self._series, "#FF806B", (self._axis_x, self._axis_y)),
+            (self._time_chart, self._time_series, "#55A7FF", (self._time_axis_x, self._time_axis_y)),
+        ):
+            chart.setTheme(QChart.ChartThemeLight if name == "light" else QChart.ChartThemeDark)
+            chart.setBackgroundBrush(QColor(p["surface"]))
+            chart.setTitleBrush(QColor(p["text"]))
+            for axis in axes:
+                axis.setLabelsColor(QColor(p["muted"]))
+                axis.setGridLineColor(QColor(p["border"]))
+            for bar_set in series.barSets():
+                bar_set.setColor(QColor(color))
+        self._heatmap.update()
 
     def set_projects(self, projects):
         current = self.project_filter.currentData()

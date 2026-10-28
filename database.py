@@ -1,3 +1,4 @@
+import json
 import os
 import sqlite3
 import sys
@@ -18,6 +19,7 @@ DEFAULT_SETTINGS = {
     "long_minutes": "15",
     "long_every": "4",
     "sound_effect": "chime",
+    "ui_theme": "dark",
 }
 
 STATUS_TODO = 0
@@ -114,6 +116,10 @@ def init_db():
             conn.execute(
                 "ALTER TABLE cards ADD COLUMN priority INTEGER DEFAULT 1"
             )
+        if "done_at" not in card_columns:
+            conn.execute("ALTER TABLE cards ADD COLUMN done_at TEXT")
+        if "tags" not in card_columns:
+            conn.execute("ALTER TABLE cards ADD COLUMN tags TEXT DEFAULT '[]'")
 
 
 def get_settings():
@@ -327,33 +333,70 @@ def delete_section(section_id):
         conn.execute("DELETE FROM sections WHERE id = ?", (section_id,))
 
 
-def list_cards(project_id):
+def normalize_tags(tags):
+    if isinstance(tags, str):
+        tags = tags.replace("，", ",").split(",")
+    result, seen = [], set()
+    for tag in tags or []:
+        tag = str(tag).strip().lstrip("#").strip()
+        if tag and tag.casefold() not in seen:
+            result.append(tag)
+            seen.add(tag.casefold())
+    return result
+
+
+def card_tags(card):
+    return json.loads(card["tags"] or "[]")
+
+
+def list_tags(project_id=None):
+    return sorted({tag for card in list_cards(project_id) for tag in card_tags(card)}, key=str.casefold)
+
+
+def list_cards(project_id, search="", priority=None, tag=None, sort="priority"):
     with _conn() as conn:
-        return conn.execute(
-            "SELECT c.*, s.name AS section_name, "
+        cards = conn.execute(
+            "SELECT c.*, s.name AS section_name, p.name AS project_name, s.project_id, "
             "COUNT(i.id) AS total, "
             "COALESCE(SUM(CASE WHEN i.status = ? THEN 1 ELSE 0 END), 0) AS done "
             "FROM cards c "
             "JOIN sections s ON s.id = c.section_id "
+            "JOIN projects p ON p.id = s.project_id "
             "LEFT JOIN items i ON i.card_id = c.id "
-            "WHERE s.project_id = ? "
+            "WHERE (? IS NULL OR s.project_id = ?) "
             "GROUP BY c.id ORDER BY c.priority DESC, s.sort_order, c.id",
-            (STATUS_DONE, project_id),
+            (STATUS_DONE, project_id, project_id),
         ).fetchall()
+    query = search.strip().casefold()
+    cards = [c for c in cards
+             if (priority is None or c["priority"] == priority)
+             and (not tag or tag.casefold() in [t.casefold() for t in card_tags(c)])
+             and (not query or query in " ".join(
+                 [c["title"], c["note"], c["section_name"], c["project_name"]] + card_tags(c)
+             ).casefold())]
+    if sort == "title":
+        cards.sort(key=lambda c: (c["title"].casefold(), c["id"]))
+    elif sort in ("created", "updated", "completed"):
+        field = {"created": "created_at", "updated": "updated_at", "completed": "done_at"}[sort]
+        cards.sort(key=lambda c: (c[field] or "", c["id"]), reverse=True)
+    return cards
 
 
-def add_card(section_id, title, note="", priority=PRIORITY_MED):
+def add_card(section_id, title, note="", priority=PRIORITY_MED, tags=None, status=STATUS_TODO):
+    if status not in STATUS_NAMES:
+        raise ValueError("无效任务状态")
     now = datetime_now()
     with _conn() as conn:
         cur = conn.execute(
-            "INSERT INTO cards (section_id, title, note, status, priority, created_at, updated_at) "
-            "VALUES (?, ?, ?, 0, ?, ?, ?)",
-            (section_id, title, note, priority, now, now),
+            "INSERT INTO cards (section_id, title, note, status, priority, created_at, updated_at, tags, done_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (section_id, title, note, status, priority, now, now,
+             json.dumps(normalize_tags(tags), ensure_ascii=False), now if status == STATUS_DONE else None),
         )
         return cur.lastrowid
 
 
-def update_card(card_id, title=None, note=None, priority=None):
+def update_card(card_id, title=None, note=None, priority=None, tags=None, section_id=None):
     updates = []
     params = []
     if title is not None:
@@ -365,6 +408,12 @@ def update_card(card_id, title=None, note=None, priority=None):
     if priority is not None:
         updates.append("priority = ?")
         params.append(priority)
+    if tags is not None:
+        updates.append("tags = ?")
+        params.append(json.dumps(normalize_tags(tags), ensure_ascii=False))
+    if section_id is not None:
+        updates.append("section_id = ?")
+        params.append(section_id)
     if not updates:
         return
     updates.append("updated_at = ?")
@@ -378,10 +427,16 @@ def update_card(card_id, title=None, note=None, priority=None):
 
 
 def set_card_status(card_id, status):
+    if status not in STATUS_NAMES:
+        raise ValueError("无效任务状态")
+    now = datetime_now()
     with _conn() as conn:
         conn.execute(
-            "UPDATE cards SET status = ?, updated_at = ? WHERE id = ?",
-            (status, datetime_now(), card_id),
+            "UPDATE cards SET done_at = CASE "
+            "WHEN ? = 2 AND status <> 2 THEN ? "
+            "WHEN ? = 2 THEN done_at ELSE NULL END, "
+            "status = ?, updated_at = ? WHERE id = ?",
+            (status, now, status, status, now, card_id),
         )
 
 

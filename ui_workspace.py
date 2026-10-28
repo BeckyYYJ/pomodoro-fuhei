@@ -22,23 +22,16 @@ class ProjectWorkspace(QWidget):
         header.setSpacing(8)
         self._name_label = QLabel("")
         self._name_label.setStyleSheet(
-            "font-size: 22px; font-weight: bold; color: #F4F6F8;"
+            "font-size: 22px; font-weight: bold;"
         )
         header.addWidget(self._name_label)
         badge = QLabel("项目工作区")
-        badge.setStyleSheet(
-            "QLabel { font-size: 12px; color: #AEB6C0; background: #20242B;"
-            " border-radius: 9px; padding: 2px 10px; }"
-        )
+        badge.setProperty("role", "badge")
         header.addWidget(badge)
         header.addStretch(1)
         layout.addLayout(header)
 
         self.tabs = QTabWidget()
-        self.tabs.setStyleSheet(
-            "QTabBar::tab { padding: 11px 22px; font-size: 15px; }"
-            "QTabBar::tab:selected { color: #FFFFFF; font-weight: bold; }"
-        )
 
         self.board = BoardWidget()
         self.tabs.addTab(self.board, "看板")
@@ -88,7 +81,8 @@ class ProjectWorkspace(QWidget):
 
     def apply_settings(self):
         self._timer.apply_settings()
-        self.timer_widget._on_phase(self._timer.phase)
+        if self._timer.is_countdown():
+            self.timer_widget._on_phase(self._timer.phase)
 
     def _on_tab_changed(self, index):
         self.on_shown()

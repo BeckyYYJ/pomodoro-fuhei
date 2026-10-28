@@ -17,39 +17,20 @@ from ui_sidebar import SidebarWidget
 from ui_stats import StatsWidget
 from ui_timer import TimerWidget
 from ui_workspace import ProjectWorkspace
+from ui_theme import apply_theme, stylesheet
 
 FUNCTION_INDEX = {"timer": 0, "stats": 1, "settings": 2}
 WORKSPACE_INDEX = 3
 
-THEME_STYLE = """
-QWidget { background: #101216; color: #F4F6F8; }
-QMainWindow, QStackedWidget { background: #101216; }
-QLabel { color: #F4F6F8; }
-QPushButton, QComboBox, QLineEdit, QSpinBox {
-    min-height: 34px; padding: 0 12px; border: 1px solid #343A43;
-    border-radius: 7px; background: #1D2127; color: #F4F6F8;
-}
-QPushButton:hover, QComboBox:hover, QLineEdit:focus, QSpinBox:focus { border-color: #657181; background: #252A31; }
-QPushButton:disabled, QComboBox:disabled { color: #68727E; background: #181B20; }
-QComboBox QAbstractItemView { background: #1D2127; color: #F4F6F8; selection-background-color: #303A48; }
-QListWidget, QTableWidget, QScrollArea { background: #171A20; color: #E8ECF1; border: 1px solid #2D333C; border-radius: 8px; }
-QListWidget::item, QTableWidget::item { padding: 8px; }
-QListWidget::item:selected, QTableWidget::item:selected { background: #303A48; color: #FFFFFF; }
-QHeaderView::section { background: #20242B; color: #AEB6C0; border: none; padding: 8px; }
-QTabWidget::pane { border: 1px solid #2D333C; border-radius: 8px; background: #15181D; }
-QTabBar::tab { background: #1D2127; color: #929AA6; padding: 10px 20px; margin-right: 4px; border-radius: 6px; }
-QTabBar::tab:selected { background: #303A48; color: #FFFFFF; font-weight: bold; }
-QProgressBar { background: #30353D; border: none; border-radius: 4px; }
-QScrollBar:vertical { background: #15181D; width: 10px; margin: 2px; }
-QScrollBar::handle:vertical { background: #3A424D; border-radius: 5px; min-height: 24px; }
-"""
+THEME_STYLE = stylesheet("dark")
 
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("番茄钟")
-        self.resize(1000, 680)
+        self.resize(1180, 760)
+        self.setMinimumSize(950, 620)
         self._pending_record_id = None
 
         self._timer = PomodoroTimer(database.get_settings, self)
@@ -100,6 +81,7 @@ class MainWindow(QMainWindow):
         self._refresh_today()
         self._apply_ui_margin()
         self._apply_ui_font()
+        self._apply_theme()
 
     def refresh_projects(self):
         projects = database.list_projects()
@@ -170,10 +152,17 @@ class MainWindow(QMainWindow):
 
     def _on_settings_saved(self):
         self._timer.apply_settings()
-        self.timer_widget._on_phase(self._timer.phase)
+        if self._timer.is_countdown():
+            self.timer_widget._on_phase(self._timer.phase)
         self.workspace.apply_settings()
         self._apply_ui_margin()
         self._apply_ui_font()
+        self._apply_theme()
+
+    def _apply_theme(self):
+        apply_theme(QApplication.instance(), database.get_settings().get("ui_theme", "dark"))
+        self.stats_widget.apply_theme()
+        self.workspace.stats.apply_theme()
 
     def _apply_ui_margin(self):
         margin = int(database.get_settings().get("ui_margin", 16))
@@ -201,7 +190,8 @@ def main():
     app = QApplication([])
     app.setApplicationName("番茄钟")
     app.setFont(QFont("Microsoft YaHei UI", 14))
-    app.setStyleSheet(THEME_STYLE)
+    app.setStyle("Fusion")
+    apply_theme(app, database.get_settings().get("ui_theme", "dark"))
     window = MainWindow()
     window.show()
     app.exec()

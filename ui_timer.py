@@ -76,7 +76,7 @@ class TimerWidget(QWidget):
 
         self.time_label = QLabel(alignment=Qt.AlignCenter)
         self.time_label.setStyleSheet(
-            "font-size: 96px; font-weight: bold; font-family: Consolas; color: #F4F6F8;"
+            "font-size: 96px; font-weight: bold; font-family: Consolas;"
         )
         layout.addWidget(self.time_label)
 
@@ -86,11 +86,11 @@ class TimerWidget(QWidget):
         layout.addWidget(self.progress)
 
         self.cycle_label = QLabel(alignment=Qt.AlignCenter)
-        self.cycle_label.setStyleSheet("font-size: 15px; color: #929AA6;")
+        self.cycle_label.setStyleSheet("font-size: 15px;")
         layout.addWidget(self.cycle_label)
 
         self.today_label = QLabel(alignment=Qt.AlignCenter)
-        self.today_label.setStyleSheet("font-size: 15px; color: #929AA6;")
+        self.today_label.setStyleSheet("font-size: 15px;")
         layout.addWidget(self.today_label)
 
         buttons = QHBoxLayout()
@@ -247,8 +247,4 @@ def _accent_button_style(color):
 
 
 def _plain_button_style():
-    return (
-        "QPushButton { font-size: 15px; background: #1D2127; color: #F4F6F8;"
-        " border-radius: 8px; padding: 0 20px; }"
-        "QPushButton:hover { background: #30353D; }"
-    )
+    return "QPushButton { font-size: 15px; border-radius: 8px; padding: 0 20px; }"
