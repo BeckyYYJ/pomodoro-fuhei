@@ -1,6 +1,7 @@
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QInputDialog,
+    QFrame,
     QLabel,
     QListWidget,
     QListWidgetItem,
@@ -13,7 +14,7 @@ from PySide6.QtWidgets import (
 
 import database
 
-_SECTION_STYLE = "font-size: 12px; padding: 2px 8px;"
+_SECTION_STYLE = "font-size: 15px; font-weight: bold; padding: 2px 8px;"
 _ITEM_STYLE = (
     "QListWidget { border: none; background: transparent; font-size: 14px; }"
     "QListWidget::item { padding: 6px 10px; border-radius: 6px; }"
@@ -45,22 +46,47 @@ class SidebarWidget(QWidget):
             item = QListWidgetItem(label)
             item.setData(Qt.UserRole, key)
             self.function_list.addItem(item)
-        self.function_list.currentRowChanged.connect(self._on_function_changed)
+        self.function_list.setFixedHeight(112)
+        # Focus restoration after a drag may change currentRow without a user
+        # navigation. Only explicit mouse/keyboard activation changes pages.
+        self.function_list.itemClicked.connect(
+            lambda item: self._on_function_changed(self.function_list.row(item)))
+        self.function_list.itemActivated.connect(
+            lambda item: self._on_function_changed(self.function_list.row(item)))
         layout.addWidget(self.function_list)
+
+        self._add_divider(layout)
 
         layout.addWidget(QLabel("项目", styleSheet=_SECTION_STYLE))
         self.project_list = QListWidget()
         self.project_list.setStyleSheet(_ITEM_STYLE)
         self.project_list.setContextMenuPolicy(Qt.CustomContextMenu)
         self.project_list.customContextMenuRequested.connect(self._on_context_menu)
-        self.project_list.currentRowChanged.connect(self._on_project_changed)
+        self.project_list.itemClicked.connect(
+            lambda item: self._on_project_changed(self.project_list.row(item)))
+        self.project_list.itemActivated.connect(
+            lambda item: self._on_project_changed(self.project_list.row(item)))
         layout.addWidget(self.project_list, 1)
 
         new_button = QPushButton("＋ 新建项目")
         new_button.clicked.connect(self._on_new_project)
         layout.addWidget(new_button)
 
+        self._add_divider(layout)
+        self.archive_button = QPushButton("归档")
+        self.archive_button.setProperty("role", "archiveNav")
+        self.archive_button.setCheckable(True)
+        self.archive_button.setAccessibleName("查看全部项目归档")
+        self.archive_button.clicked.connect(lambda: self.select_function("archive"))
+        layout.addWidget(self.archive_button)
+
         self.select_function("timer")
+
+    def _add_divider(self, layout):
+        line = QFrame()
+        line.setObjectName("sidebarDivider")
+        line.setFixedSize(116, 1)
+        layout.addWidget(line, 0, Qt.AlignHCenter)
 
     def set_projects(self, projects):
         current = self.project_list.currentItem()
@@ -79,6 +105,14 @@ class SidebarWidget(QWidget):
         self.project_list.blockSignals(False)
 
     def select_function(self, key):
+        if key == "archive":
+            for nav in (self.function_list, self.project_list):
+                nav.blockSignals(True)
+                nav.setCurrentRow(-1)
+                nav.blockSignals(False)
+            self.archive_button.setChecked(True)
+            self.function_selected.emit(key)
+            return
         index = self.project_list.currentRow()
         if index >= 0:
             self.project_list.blockSignals(True)
@@ -87,6 +121,7 @@ class SidebarWidget(QWidget):
         for i in range(self.function_list.count()):
             if self.function_list.item(i).data(Qt.UserRole) == key:
                 self.function_list.setCurrentRow(i)
+                self._on_function_changed(i)
                 return
 
     def select_project(self, project_id):
@@ -98,11 +133,13 @@ class SidebarWidget(QWidget):
         for i in range(self.project_list.count()):
             if self.project_list.item(i).data(Qt.UserRole) == project_id:
                 self.project_list.setCurrentRow(i)
+                self._on_project_changed(i)
                 return
 
     def _on_function_changed(self, row):
         if row < 0:
             return
+        self.archive_button.setChecked(False)
         key = self.function_list.item(row).data(Qt.UserRole)
         if self.project_list.currentRow() >= 0:
             self.project_list.blockSignals(True)
@@ -113,6 +150,7 @@ class SidebarWidget(QWidget):
     def _on_project_changed(self, row):
         if row < 0:
             return
+        self.archive_button.setChecked(False)
         pid = self.project_list.item(row).data(Qt.UserRole)
         if self.function_list.currentRow() >= 0:
             self.function_list.blockSignals(True)
@@ -161,7 +199,7 @@ class SidebarWidget(QWidget):
         answer = QMessageBox.question(
             self,
             "删除项目",
-            f"删除项目「{name}」？\n其看板内容将一并删除，番茄记录归入默认项目。",
+            f"删除项目「{name}」？\n其看板、归档卡片和步骤将一并删除，番茄记录归入默认项目。",
         )
         if answer == QMessageBox.Yes:
             database.delete_project(pid)

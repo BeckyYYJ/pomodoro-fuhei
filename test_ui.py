@@ -9,9 +9,9 @@ from unittest.mock import patch
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtCore import QEvent, QMimeData, QPointF, Qt
-from PySide6.QtGui import QDragEnterEvent, QDropEvent, QFontDatabase, QPalette
+from PySide6.QtGui import QDragEnterEvent, QDropEvent, QFontDatabase, QFontMetrics, QPalette
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QLabel
+from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QMessageBox
 
 import database
 from ui_board import BoardWidget, CardFrame, CARD_MIME
@@ -70,15 +70,98 @@ class KanbanUITests(unittest.TestCase):
         labels = [l.text() for l in self.board._columns[2].findChildren(QLabel)]
         self.assertTrue(any("完成于 " in text and ":" in text for text in labels))
 
-    def test_card_click_and_keyboard_open(self):
+    def test_card_click_and_keyboard_toggle_steps_without_editing(self):
+        database.add_item(self.card_id, "具体步骤内容")
         frame = CardFrame(self.card())
         frame.resize(300, 160)
         frame.show()
         opened = []
         frame.opened.connect(opened.append)
         QTest.mouseClick(frame, Qt.LeftButton)
+        self.assertTrue(frame._steps_panel.isVisible())
+        self.assertTrue(any("具体步骤内容" in label.text() for label in frame._steps_panel.findChildren(QLabel)))
         QTest.keyClick(frame, Qt.Key_Return)
-        self.assertEqual(opened, [self.card_id, self.card_id])
+        self.assertFalse(frame._steps_panel.isVisible())
+        self.assertEqual(opened, [])
+        edit = next(b for b in frame.findChildren(QPushButton) if b.text() == "edit")
+        QTest.mouseClick(edit, Qt.LeftButton)
+        self.assertEqual(opened, [self.card_id])
+        self.assertFalse(frame._steps_panel.isVisible())
+
+    def test_passive_sidebar_row_change_after_drop_does_not_navigate(self):
+        window = MainWindow()
+        window.show()
+        APP.processEvents()
+        window.sidebar.select_project(self.pid)
+        board = window.workspace.board
+        APP.processEvents()
+        frame = next(frame for frame in board.findChildren(CardFrame) if frame.isVisible())
+        frame.setFocus()
+        board._on_card_dropped(self.card_id, database.STATUS_DONE)
+        QTest.qWait(5)
+        APP.sendPostedEvents(None, QEvent.DeferredDelete)
+        # QAbstractItemView may select its first row when drag focus returns.
+        # Such passive selection must not be interpreted as a user navigation.
+        window.sidebar.function_list.setCurrentRow(0)
+        self.assertEqual(window.stack.currentWidget(), window.workspace)
+        self.assertEqual(window.workspace.tabs.currentWidget(), board)
+
+    def test_expanded_steps_survive_drop_and_edit_button_only_opens_editor(self):
+        database.add_item(self.card_id, "展开后保留的步骤")
+        window = MainWindow()
+        window.show()
+        APP.processEvents()
+        window.sidebar.select_project(self.pid)
+        board = window.workspace.board
+        APP.processEvents()
+        frame = next(frame for frame in board.findChildren(CardFrame) if frame.isVisible())
+        QTest.mouseClick(frame, Qt.LeftButton)
+        self.assertTrue(frame._steps_panel.isVisible())
+        board._on_card_dropped(self.card_id, database.STATUS_DONE)
+        QTest.qWait(50)
+        APP.processEvents()
+        frame = next(frame for frame in board.findChildren(CardFrame) if frame.isVisible())
+        self.assertTrue(frame._steps_panel.isVisible())
+        self.assertEqual(window.stack.currentWidget(), window.workspace)
+        def edit(dialog):
+            dialog._title.setText("只通过 edit 编辑")
+            return 1
+        with patch.object(CardDialog, "exec", edit):
+            QTest.mouseClick(frame._edit_button, Qt.LeftButton)
+        APP.processEvents()
+        self.assertEqual(self.card()["title"], "只通过 edit 编辑")
+        active = next(frame for frame in board.findChildren(CardFrame) if frame.isVisible())
+        self.assertTrue(active._steps_panel.isVisible())
+
+    def test_drag_gesture_does_not_expand_steps(self):
+        frame = CardFrame(self.card())
+        frame.resize(350, 250)
+        frame.show()
+        with patch("ui_board.QDrag") as drag:
+            QTest.mousePress(frame, Qt.LeftButton, pos=frame.rect().center())
+            QTest.mouseMove(frame, frame.rect().center() + frame.rect().topRight() / 3)
+            QTest.mouseRelease(frame, Qt.LeftButton, pos=frame.rect().center())
+            drag.return_value.exec.assert_called_once()
+        self.assertFalse(frame._steps_panel.isVisible())
+
+    def test_all_card_text_tracks_font_setting_without_recreating_cards(self):
+        database.add_item(self.card_id, "步骤字号也要变化")
+        window = MainWindow()
+        database.set_card_status(self.card_id, database.STATUS_DONE)
+        frame = CardFrame(self.card())
+        frame.show()
+        QTest.mouseClick(frame, Qt.LeftButton)
+        labels = frame.findChildren(QLabel)
+        settings = window.settings_widget
+        settings._font_size.setCurrentIndex(settings._font_size.findData(12))
+        settings.save()
+        APP.processEvents()
+        small = [QFontMetrics(label.font()).height() for label in labels]
+        settings._font_size.setCurrentIndex(settings._font_size.findData(16))
+        settings.save()
+        APP.processEvents()
+        large = [QFontMetrics(label.font()).height() for label in labels]
+        self.assertTrue(all(big > little for little, big in zip(small, large)), (small, large))
 
     def test_dialog_create_steps_tags_and_edit(self):
         dialog = CardDialog(project_id=self.pid, status=database.STATUS_DONE)
@@ -155,17 +238,154 @@ class KanbanUITests(unittest.TestCase):
             self.assertEqual(APP.palette().color(QPalette.Window).name(), palette_for(theme)["bg"].lower())
             self.assertEqual(window.timer_widget.mode_combo.count(), 2)
             self.assertEqual(window.workspace.timer_widget.mode_combo.count(), 2)
-            self.assertEqual(window.workspace.tabs.count(), 4)
+            self.assertEqual(window.workspace.tabs.count(), 5)
+
+    def test_card_context_actions_archive_only_done_and_delete_after_confirmation(self):
+        frame = next(f for f in self.board.findChildren(CardFrame) if f.isVisible())
+        menu = frame.create_context_menu()
+        self.assertEqual([a.text() for a in menu.actions()], ["删除", "编辑"])
+        database.set_card_status(self.card_id, database.STATUS_DONE)
+        self.board._refresh_board()
+        APP.processEvents()
+        frame = next(f for f in self.board.findChildren(CardFrame) if f.isVisible())
+        menu = frame.create_context_menu()
+        self.assertEqual([a.text() for a in menu.actions()], ["归档", "删除", "编辑"])
+        menu.actions()[0].trigger()
+        self.assertEqual(database.list_cards(self.pid), [])
+        from ui_archive import ArchiveWidget
+        archive = ArchiveWidget(self.pid)
+        archive.show()
+        APP.processEvents()
+        frame = next(f for f in archive.findChildren(CardFrame) if f.isVisible())
+        menu = frame.create_context_menu()
+        self.assertEqual([a.text() for a in menu.actions()], ["删除"])
+        with patch.object(QMessageBox, "question", return_value=QMessageBox.No):
+            menu.actions()[0].trigger()
+        self.assertEqual(len(database.list_cards(None, archived=True)), 1)
+        with patch.object(QMessageBox, "question", return_value=QMessageBox.Yes):
+            menu.actions()[0].trigger()
+        self.assertEqual(database.list_cards(None, archived=True), [])
+
+    def test_bulk_archive_ignores_filters_and_all_project_search_scope(self):
+        database.set_card_status(self.card_id, database.STATUS_DONE)
+        second = database.add_card(self.sid, "被筛选隐藏的完成", status=database.STATUS_DONE)
+        other_sid = database.add_section(1, "其他")
+        other = database.add_card(other_sid, "其他完成", status=database.STATUS_DONE)
+        self.board._scope.setCurrentIndex(1)
+        self.board._search.setText("其他完成")
+        self.board._refresh_board()
+        button = self.board._columns[2]._archive_button
+        self.assertTrue(button.isEnabled())
+        QTest.mouseClick(button, Qt.LeftButton)
+        self.assertEqual({c["id"] for c in database.list_cards(self.pid, archived=True)},
+                         {self.card_id, second})
+        self.assertEqual([c["id"] for c in database.list_cards(1)], [other])
+        self.assertFalse(button.isEnabled())
+
+    def test_archive_project_and_global_navigation_grid_filters_and_readonly(self):
+        ids = []
+        for title in ("Echo", "Delta", "Charlie", "Bravo", "Alpha"):
+            card = database.add_card(self.sid, title, status=database.STATUS_DONE,
+                                     tags=["交付"], priority=2)
+            database.archive_card(card)
+            ids.append(card)
+        other_sid = database.add_section(1, "其他")
+        other = database.add_card(other_sid, "Zulu", status=database.STATUS_DONE, tags=["文档"])
+        database.archive_card(other)
+        window = MainWindow()
+        window.resize(1500, 900)
+        window.show()
+        window.sidebar.select_project(self.pid)
+        page = window.workspace.archive
+        window.workspace.tabs.setCurrentWidget(page)
+        APP.processEvents()
+        frames = [f for f in page.findChildren(CardFrame) if f.isVisible()]
+        self.assertEqual({f._card_id for f in frames}, set(ids))
+        positions = [page._grid.getItemPosition(i)[:2] for i in range(page._grid.count())]
+        self.assertEqual(positions, [(0, 0), (0, 1), (0, 2), (0, 3), (1, 0)])
+        frame = frames[0]
+        self.assertFalse(frame.acceptDrops())
+        self.assertFalse(frame._edit_button.isVisible())
+        database.add_item(self.card_id, "其他活动卡片步骤")
+        with patch("ui_board.QDrag") as drag:
+            QTest.mousePress(frame, Qt.LeftButton, pos=frame.rect().center())
+            QTest.mouseMove(frame, frame.rect().center() + QPointF(60, 0).toPoint())
+            QTest.mouseRelease(frame, Qt.LeftButton)
+            drag.assert_not_called()
+        window.sidebar.select_function("archive")
+        APP.processEvents()
+        self.assertEqual(window.stack.currentWidget(), window.archive_widget)
+        page = window.archive_widget
+        self.assertEqual(len([f for f in page.findChildren(CardFrame) if f.isVisible()]), 6)
+        page._tag_filter.setCurrentIndex(page._tag_filter.findData("交付"))
+        page._sort.setCurrentIndex(page._sort.findData("title"))
+        APP.processEvents()
+        self.assertEqual([page._grid.itemAt(i).widget()._card_id for i in range(page._grid.count())],
+                         list(reversed(ids)))
+        page._search.setText("Bravo")
+        QTest.qWait(220)
+        self.assertEqual(page._grid.count(), 1)
+        window.sidebar.select_project(1)
+        self.assertEqual(window.workspace.archive._project_id, 1)
+        self.assertEqual(window.workspace.archive._grid.count(), 1)
+
+    def test_global_archive_refreshes_after_project_deletion_and_rename(self):
+        database.set_card_status(self.card_id, database.STATUS_DONE)
+        database.archive_card(self.card_id)
+        window = MainWindow()
+        window.show()
+        window.sidebar.select_project(self.pid)
+        window.workspace.tabs.setCurrentWidget(window.workspace.archive)
+        window.sidebar.select_function("archive")
+        APP.processEvents()
+        self.assertEqual(window.archive_widget._grid.count(), 1)
+        with database._conn() as conn:
+            conn.execute("UPDATE projects SET name = '更名项目' WHERE id = ?", (self.pid,))
+        window._on_projects_changed()
+        self.assertTrue(any("更名项目" in l.text() for l in
+                            window.archive_widget._grid.itemAt(0).widget().findChildren(QLabel)))
+        self.assertTrue(any("更名项目" in l.text() for l in
+                            window.workspace.archive._grid.itemAt(0).widget().findChildren(QLabel)))
+        database.delete_project(self.pid)
+        window._on_projects_changed()
+        self.assertEqual(window.archive_widget._grid.count(), 0)
+
+    def test_archive_grid_keeps_wrapped_text_and_expanded_steps_unclipped(self):
+        database.update_card(self.card_id, note="保留需求说明与交付记录，便于后续查阅。")
+        database.add_item(self.card_id, "核对界面与交互细节，并完成所有验收步骤")
+        database.set_card_status(self.card_id, database.STATUS_DONE)
+        database.archive_card(self.card_id)
+        window = MainWindow()
+        window.resize(1180, 760)
+        window.show()
+        window.sidebar.select_project(self.pid)
+        page = window.workspace.archive
+        window.workspace.tabs.setCurrentWidget(page)
+        APP.processEvents()
+        frame = page._grid.itemAt(0).widget()
+        QTest.mouseClick(frame, Qt.LeftButton)
+        for size in (12, 16, 14):
+            settings = window.settings_widget
+            settings._font_size.setCurrentIndex(settings._font_size.findData(size))
+            settings.save()
+            APP.processEvents()
+            self.assertGreaterEqual(frame.height(), frame.heightForWidth(frame.width()))
+            for label in frame.findChildren(QLabel):
+                if label.isVisible() and label.wordWrap():
+                    self.assertGreaterEqual(label.height(), label.heightForWidth(label.width()), label.text())
 
     def test_sidebar_can_return_to_same_function_after_project(self):
         window = MainWindow()
+        window.show()
+        APP.processEvents()
         window.sidebar.select_project(self.pid)
         self.assertEqual(window.stack.currentWidget(), window.workspace)
-        window.sidebar.function_list.setCurrentRow(0)
+        nav = window.sidebar.function_list
+        QTest.mouseClick(nav.viewport(), Qt.LeftButton, pos=nav.visualItemRect(nav.item(0)).center())
         self.assertEqual(window.stack.currentWidget(), window.timer_widget)
         window.sidebar.select_project(self.pid)
         self.assertEqual(window.stack.currentWidget(), window.workspace)
-        window.sidebar.function_list.setCurrentRow(0)
+        QTest.mouseClick(nav.viewport(), Qt.LeftButton, pos=nav.visualItemRect(nav.item(0)).center())
         self.assertEqual(window.stack.currentWidget(), window.timer_widget)
 
     def test_todo_titles_use_theme_text_instead_of_badge_background_colors(self):

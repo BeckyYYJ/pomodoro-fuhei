@@ -11,10 +11,13 @@
 - 多项目管理：创建、重命名和删除项目
 - 项目看板：待办、进行中、已完成三列展示
 - 卡片拖拽：拖动卡片即可修改任务状态
-- Trello 风格看板：纵向自适应卡片、列内直接新建、点击或按 Enter 打开任务详情
+- Trello 风格看板：纵向自适应卡片、列内直接新建；点击卡片或按 Enter 展开/收起具体步骤，右上角 `edit` 打开编辑
 - 任务详情：编辑标题、备注、分类、优先级、标签和具体步骤；取消不保存修改
 - 搜索与筛选：支持当前项目或全部项目，按关键词、优先级、标签筛选及排序
 - 完成时间：任务进入 Done 时记录本地日期和时间（精确到秒），移出后清除，再次完成重新记录
+- 完成卡片归档：看板右键归档，或通过已完成列右上角“一键归档”归档当前项目全部已完成卡片；待办和进行中不能归档
+- 归档入口：项目“归档”标签页查看当前项目，侧栏“归档”查看所有项目；每行四张，支持搜索、优先级/标签筛选及排序
+- 归档卡片只读：可展开查看步骤、保留完成时间；不可拖动或编辑，右键仅可删除，删除前确认
 - 待办管理：分类、任务和具体步骤三级管理
 - 任务优先级：低、中、高优先级标记
 - 任务进度：根据具体步骤自动计算完成进度
@@ -22,6 +25,7 @@
 - 最近 7 天图表：番茄数量和专注时间柱状图
 - 贡献热力图：查看长期专注记录
 - 个性化设置：专注时长、休息时长、音效、界面边距和字体大小
+- 卡片文字随字号设置即时变化，包括标题、备注、标签和展开的具体步骤
 - 本地数据：SQLite 存储，无需网络和云端服务
 - 浅色 / 深色主题：在设置中选择主题并保存，立即生效，重启后保留
 
@@ -44,14 +48,14 @@ python main.py
 ## 测试
 
 ```powershell
-python test_board.py
-python test_logic.py
-python -m unittest test_kanban test_ui -v
+python -m unittest discover -v
 ```
 
 首次使用新版会自动升级原有 SQLite 表。旧任务没有可靠完成时间时保持为空；不会把升级时间填作完成时间。现有番茄钟与正计时仍按项目记录，不关联具体任务。
 
-看板主题预览：[浅色](docs/previews/kanban-light.png) · [深色](docs/previews/kanban-dark.png)。预览使用临时示例数据，不写入实际数据库。
+看板主题预览：[浅色](docs/previews/kanban-expanded-light.png) · [深色](docs/previews/kanban-expanded-dark.png)。预览使用临时示例数据，不写入实际数据库。
+
+归档页面预览：[浅色](docs/previews/archive-light.png) · [深色](docs/previews/archive-dark.png)。归档会自动从看板和待办移出卡片，保留原项目、分类、备注、步骤、标签及完成时间。归档页不提供恢复操作。
 
 ## 打包
 
@@ -63,6 +67,14 @@ build.bat
 
 生成的桌面程序位于 `dist/` 目录。
 
+双击 `dist/PomodoroTimer.exe` 即可运行，无需安装 Python。`build.bat` 优先使用项目的 `.venv`，也可以在项目目录执行：
+
+```powershell
+.\.venv\Scripts\python.exe -m PyInstaller --clean --noconfirm PomodoroTimer.spec
+```
+
+打包版的数据文件保存在 exe 同目录。要沿用已有数据，请在首次打开 exe 前将原来的 `pomodoro_data.db` 复制到该目录。
+
 ## 项目结构
 
 | 文件 | 说明 |
@@ -72,6 +84,7 @@ build.bat
 | `timer_logic.py` | 番茄钟核心逻辑 |
 | `ui_main.py` | 主窗口和全局导航 |
 | `ui_board.py` | 项目看板 |
+| `ui_archive.py` | 项目与全局归档、四列只读网格 |
 | `ui_card_dialog.py` | 看板和待办共用的任务详情编辑器 |
 | `ui_theme.py` | 浅色和深色主题 |
 | `ui_todo.py` | 待办与步骤管理 |

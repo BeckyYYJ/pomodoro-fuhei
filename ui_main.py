@@ -17,9 +17,10 @@ from ui_sidebar import SidebarWidget
 from ui_stats import StatsWidget
 from ui_timer import TimerWidget
 from ui_workspace import ProjectWorkspace
+from ui_archive import ArchiveWidget
 from ui_theme import apply_theme, stylesheet
 
-FUNCTION_INDEX = {"timer": 0, "stats": 1, "settings": 2}
+FUNCTION_INDEX = {"timer": 0, "stats": 1, "settings": 2, "archive": 4}
 WORKSPACE_INDEX = 3
 
 THEME_STYLE = stylesheet("dark")
@@ -73,6 +74,9 @@ class MainWindow(QMainWindow):
         self.workspace.timer_widget.stopwatch_stopped.connect(self._on_stopwatch_stopped)
         self.stack.addWidget(self.workspace)
 
+        self.archive_widget = ArchiveWidget()
+        self.stack.addWidget(self.archive_widget)
+
         layout.addWidget(self.stack, 1)
         self.setCentralWidget(central)
 
@@ -92,9 +96,12 @@ class MainWindow(QMainWindow):
         self.workspace.refresh_projects(projects)
         if self.workspace._project_id not in {p["id"] for p in projects}:
             self.workspace.set_project(database.DEFAULT_PROJECT_ID)
+        self.archive_widget.refresh()
 
     def _on_function_selected(self, key):
         self.stack.setCurrentIndex(FUNCTION_INDEX[key])
+        if key == "archive":
+            self.archive_widget.refresh()
 
     def _on_project_selected(self, project_id):
         self.workspace.set_project(project_id)

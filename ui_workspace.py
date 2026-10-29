@@ -3,6 +3,7 @@ from PySide6.QtWidgets import QHBoxLayout, QLabel, QTabWidget, QVBoxLayout, QWid
 import database
 from timer_logic import PomodoroTimer
 from ui_board import BoardWidget
+from ui_archive import ArchiveWidget
 from ui_stats import StatsWidget
 from ui_timer import TimerWidget
 from ui_todo import TodoWidget
@@ -46,6 +47,9 @@ class ProjectWorkspace(QWidget):
         self.stats = StatsWidget()
         self.tabs.addTab(self.stats, "统计")
 
+        self.archive = ArchiveWidget(self._project_id)
+        self.tabs.addTab(self.archive, "归档")
+
         self.tabs.currentChanged.connect(self._on_tab_changed)
         layout.addWidget(self.tabs, 1)
 
@@ -63,12 +67,17 @@ class ProjectWorkspace(QWidget):
         self.todo.set_project(project_id)
         self.timer_widget.lock_project(project_id)
         self.stats.lock_project(project_id)
+        self.archive.set_project(project_id)
         self._refresh_today()
 
     def refresh_projects(self, projects):
         self.timer_widget.set_projects(projects)
         self.stats.set_projects(projects)
         self.board.refresh_projects()
+        self.archive.refresh()
+        project = next((p for p in projects if p["id"] == self._project_id), None)
+        if project:
+            self._name_label.setText(project["name"])
 
     def on_shown(self):
         widget = self.tabs.currentWidget()
@@ -78,6 +87,8 @@ class ProjectWorkspace(QWidget):
             self.board.refresh_projects()
         elif widget is self.todo:
             self.todo.refresh()
+        elif widget is self.archive:
+            self.archive.refresh()
 
     def apply_settings(self):
         self._timer.apply_settings()

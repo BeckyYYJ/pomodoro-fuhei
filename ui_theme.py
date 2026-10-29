@@ -58,18 +58,25 @@ QScrollBar::add-line, QScrollBar::sub-line { width: 0; height: 0; }
 QWidget#sidebar { background: %(surface)s; border-right: 1px solid %(border)s; }
 QWidget#sidebar QListWidget { border: none; background: transparent; }
 QWidget#sidebar QListWidget::item:selected { background: %(selected)s; color: %(text)s; font-weight: 600; }
-QWidget#board { background: %(board)s; border-radius: 10px; }
-QScrollArea#boardScroll, QScrollArea#columnScroll { background: transparent; border: none; }
-QWidget#boardColumns, QWidget#columnBody { background: transparent; }
+QFrame#sidebarDivider { background: %(border)s; border: none; }
+QPushButton[role="archiveNav"] { background: transparent; border: none; text-align: left; padding: 6px 10px; }
+QPushButton[role="archiveNav"]:hover { background: %(hover)s; }
+QPushButton[role="archiveNav"]:checked { background: %(selected)s; font-weight: 600; }
+QWidget#board, QWidget#archive { background: %(board)s; border-radius: 10px; }
+QScrollArea#boardScroll, QScrollArea#columnScroll, QScrollArea#archiveScroll { background: transparent; border: none; }
+QWidget#boardColumns, QWidget#columnBody, QWidget#archiveGrid { background: transparent; }
 QFrame#boardColumn { background: %(column)s; border-radius: 10px; }
 QFrame#boardColumn[dropActive="true"] { border: 2px solid %(accent)s; }
 QFrame#card { background: %(card)s; border: 1px solid %(border)s; border-radius: 8px; }
 QFrame#card:hover, QFrame#card[dropActive="true"] { border: 1px solid %(accent)s; }
-QLabel[role="cardTitle"] { font-size: 14px; font-weight: 600; }
-QLabel[role="tag"] { background: %(selected)s; border-radius: 4px; padding: 2px 6px; font-size: 11px; }
-QLabel[role="priority0"] { background: #216E4E; color: #FFFFFF; border-radius: 4px; padding: 2px 6px; font-size: 11px; }
-QLabel[role="priority1"] { background: #F5CD47; color: #172B4D; border-radius: 4px; padding: 2px 6px; font-size: 11px; }
-QLabel[role="priority2"] { background: #AE2E24; color: #FFFFFF; border-radius: 4px; padding: 2px 6px; font-size: 11px; }
+QLabel[role="cardTitle"] { font-weight: 600; }
+QLabel[role="tag"] { background: %(selected)s; border-radius: 4px; padding: 2px 6px; }
+QLabel[role="priority0"] { background: #216E4E; color: #FFFFFF; border-radius: 4px; padding: 2px 6px; }
+QLabel[role="priority1"] { background: #F5CD47; color: #172B4D; border-radius: 4px; padding: 2px 6px; }
+QLabel[role="priority2"] { background: #AE2E24; color: #FFFFFF; border-radius: 4px; padding: 2px 6px; }
+QLabel[role="completedStep"] { color: %(muted)s; text-decoration: line-through; }
+QPushButton[role="cardEdit"] { min-height: 22px; padding: 2px 8px; color: %(muted)s; }
+QWidget#cardSteps { border-top: 1px solid %(border)s; }
 QCheckBox { spacing: 8px; }
 """ % p
 

@@ -120,6 +120,8 @@ def init_db():
             conn.execute("ALTER TABLE cards ADD COLUMN done_at TEXT")
         if "tags" not in card_columns:
             conn.execute("ALTER TABLE cards ADD COLUMN tags TEXT DEFAULT '[]'")
+        if "archived_at" not in card_columns:
+            conn.execute("ALTER TABLE cards ADD COLUMN archived_at TEXT")
 
 
 def get_settings():
@@ -349,11 +351,12 @@ def card_tags(card):
     return json.loads(card["tags"] or "[]")
 
 
-def list_tags(project_id=None):
-    return sorted({tag for card in list_cards(project_id) for tag in card_tags(card)}, key=str.casefold)
+def list_tags(project_id=None, archived=False):
+    return sorted({tag for card in list_cards(project_id, archived=archived)
+                   for tag in card_tags(card)}, key=str.casefold)
 
 
-def list_cards(project_id, search="", priority=None, tag=None, sort="priority"):
+def list_cards(project_id, search="", priority=None, tag=None, sort="priority", archived=False):
     with _conn() as conn:
         cards = conn.execute(
             "SELECT c.*, s.name AS section_name, p.name AS project_name, s.project_id, "
@@ -364,8 +367,9 @@ def list_cards(project_id, search="", priority=None, tag=None, sort="priority"):
             "JOIN projects p ON p.id = s.project_id "
             "LEFT JOIN items i ON i.card_id = c.id "
             "WHERE (? IS NULL OR s.project_id = ?) "
+            "AND (c.archived_at IS NOT NULL) = ? "
             "GROUP BY c.id ORDER BY c.priority DESC, s.sort_order, c.id",
-            (STATUS_DONE, project_id, project_id),
+            (STATUS_DONE, project_id, project_id, bool(archived)),
         ).fetchall()
     query = search.strip().casefold()
     cards = [c for c in cards
@@ -376,8 +380,9 @@ def list_cards(project_id, search="", priority=None, tag=None, sort="priority"):
              ).casefold())]
     if sort == "title":
         cards.sort(key=lambda c: (c["title"].casefold(), c["id"]))
-    elif sort in ("created", "updated", "completed"):
-        field = {"created": "created_at", "updated": "updated_at", "completed": "done_at"}[sort]
+    elif sort in ("created", "updated", "completed", "archived"):
+        field = {"created": "created_at", "updated": "updated_at", "completed": "done_at",
+                 "archived": "archived_at"}[sort]
         cards.sort(key=lambda c: (c[field] or "", c["id"]), reverse=True)
     return cards
 
@@ -421,7 +426,7 @@ def update_card(card_id, title=None, note=None, priority=None, tags=None, sectio
     params.append(card_id)
     with _conn() as conn:
         conn.execute(
-            "UPDATE cards SET " + ", ".join(updates) + " WHERE id = ?",
+            "UPDATE cards SET " + ", ".join(updates) + " WHERE id = ? AND archived_at IS NULL",
             params,
         )
 
@@ -435,9 +440,29 @@ def set_card_status(card_id, status):
             "UPDATE cards SET done_at = CASE "
             "WHEN ? = 2 AND status <> 2 THEN ? "
             "WHEN ? = 2 THEN done_at ELSE NULL END, "
-            "status = ?, updated_at = ? WHERE id = ?",
+            "status = ?, updated_at = ? WHERE id = ? AND archived_at IS NULL",
             (status, now, status, status, now, card_id),
         )
+
+
+def archive_card(card_id):
+    """Archive a completed card once, preserving its completion and step data."""
+    with _conn() as conn:
+        return conn.execute(
+            "UPDATE cards SET archived_at = ? "
+            "WHERE id = ? AND status = ? AND archived_at IS NULL",
+            (datetime_now(), card_id, STATUS_DONE),
+        ).rowcount == 1
+
+
+def archive_done_cards(project_id):
+    """Archive every completed card in one project, independent of view filters."""
+    with _conn() as conn:
+        return conn.execute(
+            "UPDATE cards SET archived_at = ? WHERE status = ? AND archived_at IS NULL "
+            "AND section_id IN (SELECT id FROM sections WHERE project_id = ?)",
+            (datetime_now(), STATUS_DONE, project_id),
+        ).rowcount
 
 
 def delete_card(card_id):
@@ -470,8 +495,9 @@ def add_item(card_id, content, note="", priority=PRIORITY_MED):
     with _conn() as conn:
         cur = conn.execute(
             "INSERT INTO items (card_id, content, note, status, priority, created_at) "
-            "VALUES (?, ?, ?, 0, ?, ?)",
-            (card_id, content, note, priority, datetime_now()),
+            "SELECT ?, ?, ?, 0, ?, ? WHERE EXISTS "
+            "(SELECT 1 FROM cards WHERE id = ? AND archived_at IS NULL)",
+            (card_id, content, note, priority, datetime_now(), card_id),
         )
         return cur.lastrowid
 
@@ -479,16 +505,20 @@ def add_item(card_id, content, note="", priority=PRIORITY_MED):
 def set_item_status(item_id, status):
     with _conn() as conn:
         conn.execute(
-            "UPDATE items SET status = ?, done_at = ? WHERE id = ?",
+            "UPDATE items SET status = ?, done_at = ? WHERE id = ? "
+            "AND card_id IN (SELECT id FROM cards WHERE archived_at IS NULL)",
             (status, datetime_now() if status == STATUS_DONE else None, item_id),
         )
 
 
 def set_item_priority(item_id, priority):
     with _conn() as conn:
-        conn.execute("UPDATE items SET priority = ? WHERE id = ?", (priority, item_id))
+        conn.execute("UPDATE items SET priority = ? WHERE id = ? "
+                     "AND card_id IN (SELECT id FROM cards WHERE archived_at IS NULL)",
+                     (priority, item_id))
 
 
 def delete_item(item_id):
     with _conn() as conn:
-        conn.execute("DELETE FROM items WHERE id = ?", (item_id,))
+        conn.execute("DELETE FROM items WHERE id = ? "
+                     "AND card_id IN (SELECT id FROM cards WHERE archived_at IS NULL)", (item_id,))

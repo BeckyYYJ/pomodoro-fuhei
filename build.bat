@@ -1,5 +1,15 @@
 @echo off
-python -m PyInstaller --noconfirm --onefile --windowed --name PomodoroTimer main.py
+setlocal
+cd /d "%~dp0"
+set "BUILD_PYTHON=python"
+if exist ".venv\Scripts\python.exe" set "BUILD_PYTHON=.venv\Scripts\python.exe"
+"%BUILD_PYTHON%" -m PyInstaller --clean --noconfirm PomodoroTimer.spec
+if errorlevel 1 (
+    echo.
+    echo Build failed. Check the error above.
+    pause
+    exit /b 1
+)
 echo.
-echo Done. Exe is in dist\PomodoroTimer.exe
+echo Done. Exe is in %CD%\dist\PomodoroTimer.exe
 pause

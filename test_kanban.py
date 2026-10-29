@@ -60,6 +60,9 @@ class KanbanDataTests(unittest.TestCase):
         self.assertIn("done_at", row.keys())
         self.assertIsNone(row["done_at"])
         self.assertEqual(json.loads(row["tags"]), [])
+        self.assertIsNone(row["archived_at"])
+        self.assertTrue(database.archive_card(row["id"]))
+        self.assertIsNone(database.list_cards(self.project, archived=True)[0]["done_at"])
 
     def test_search_filter_sort_and_all_project_scope(self):
         database.update_card(self.card, tags="UI, 重要, UI", priority=database.PRIORITY_HIGH)
@@ -90,6 +93,63 @@ class KanbanDataTests(unittest.TestCase):
         database.save_settings({"ui_theme": "light"})
         database.init_db()
         self.assertEqual(database.get_settings()["ui_theme"], "light")
+
+    def test_only_done_cards_archive_and_keep_completion_steps_and_tags(self):
+        for status in (database.STATUS_TODO, database.STATUS_DOING):
+            database.set_card_status(self.card, status)
+            self.assertFalse(database.archive_card(self.card))
+        step = database.add_item(self.card, "保留的步骤")
+        database.set_item_status(step, database.STATUS_DONE)
+        database.update_card(self.card, tags=["归档专属"])
+        with patch.object(database, "datetime_now", return_value="2026-10-29T09:45:57"):
+            database.set_card_status(self.card, database.STATUS_DONE)
+        with patch.object(database, "datetime_now", return_value="2026-10-29T12:00:00"):
+            self.assertTrue(database.archive_card(self.card))
+        self.assertFalse(database.archive_card(self.card))
+        self.assertFalse(database.archive_card(-1))
+        self.assertEqual(database.list_cards(self.project), [])
+        self.assertEqual(database.list_tags(self.project), [])
+        archived = database.list_cards(self.project, archived=True)[0]
+        self.assertEqual(archived["done_at"], "2026-10-29T09:45:57")
+        self.assertEqual(archived["archived_at"], "2026-10-29T12:00:00")
+        self.assertEqual(database.list_items(self.card)[0]["content"], "保留的步骤")
+        self.assertEqual(database.list_tags(self.project, archived=True), ["归档专属"])
+        database.init_db()
+        self.assertEqual(len(database.list_cards(None, archived=True)), 1)
+
+    def test_bulk_archive_covers_all_sections_but_only_done_in_selected_project(self):
+        database.set_card_status(self.card, database.STATUS_DONE)
+        second = database.add_section(self.project, "开发")
+        done = database.add_card(second, "完成二", status=database.STATUS_DONE, tags=["交付"])
+        doing = database.add_card(second, "正在做", status=database.STATUS_DOING)
+        other_section = database.add_section(1, "个人")
+        other = database.add_card(other_section, "其他项目已完成", status=database.STATUS_DONE)
+        self.assertEqual(database.archive_done_cards(self.project), 2)
+        self.assertEqual(database.archive_done_cards(self.project), 0)
+        self.assertEqual([c["id"] for c in database.list_cards(self.project)], [doing])
+        self.assertEqual([c["id"] for c in database.list_cards(1)], [other])
+        self.assertEqual([c["id"] for c in database.list_cards(None, archived=True,
+                         search="完成二", tag="交付", priority=1)], [done])
+
+    def test_archived_cards_resist_stale_editor_and_drop_changes_then_delete_cascades(self):
+        step = database.add_item(self.card, "冻结的步骤")
+        database.set_card_status(self.card, database.STATUS_DONE)
+        database.archive_card(self.card)
+        before = dict(database.list_cards(self.project, archived=True)[0])
+        database.update_card(self.card, title="不应保存", section_id=database.add_section(1, "其他"))
+        database.set_card_status(self.card, database.STATUS_TODO)
+        database.add_item(self.card, "不应添加")
+        database.set_item_status(step, database.STATUS_DONE)
+        database.set_item_priority(step, database.PRIORITY_HIGH)
+        database.delete_item(step)
+        self.assertEqual(dict(database.list_cards(self.project, archived=True)[0]), before)
+        items = database.list_items(self.card)
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["status"], 0)
+        self.assertEqual(items[0]["priority"], 1)
+        database.delete_card(self.card)
+        self.assertEqual(database.list_cards(None, archived=True), [])
+        self.assertEqual(database.list_items(self.card), [])
 
 
 if __name__ == "__main__":
