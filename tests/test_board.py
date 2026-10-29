@@ -10,7 +10,7 @@ def run_checks():
     import sys
     import tempfile
 
-    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
     test_dir = tempfile.mkdtemp()
     os.chdir(test_dir)

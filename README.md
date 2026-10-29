@@ -1,96 +1,76 @@
-# 番茄钟 + 项目看板
+# 番茄钟 + 项目看板 v1.0
 
-[![Latest Release](https://img.shields.io/github/v/release/BeckyYYJ/pomodoro-fuhei)](https://github.com/BeckyYYJ/pomodoro-fuhei/releases/latest)
+基于 Python、PySide6 和 SQLite 的 Windows 本地桌面效率工具，无需网络或云端服务。
 
-一个基于 Python、PySide6 和 SQLite 的本地桌面效率工具，将番茄工作法、项目管理和统计分析整合在一起。AI开发自用实用小软件。
+## 运行桌面版
+
+双击 `dist/PomodoroTimer-v1.0.exe`，无需安装 Python。
+
+数据保存在 exe 同目录的 `pomodoro_data.db`。更换版本时关闭旧程序，保留这个数据库文件即可沿用数据；首次启动新版会自动升级旧表结构。旧任务缺少可靠完成时间时保持为空。
 
 ## 功能
 
-- 番茄钟倒计时：专注、短休息、长休息循环
-- 正计时模式：记录开放式专注时长
-- 多项目管理：创建、重命名和删除项目
-- 项目看板：待办、进行中、已完成三列展示
-- 卡片拖拽：拖动卡片即可修改任务状态
-- Trello 风格看板：纵向自适应卡片、列内直接新建；点击卡片或按 Enter 展开/收起具体步骤，右上角 `edit` 打开编辑
-- 任务详情：编辑标题、备注、分类、优先级、标签和具体步骤；取消不保存修改
-- 搜索与筛选：支持当前项目或全部项目，按关键词、优先级、标签筛选及排序
-- 完成时间：任务进入 Done 时记录本地日期和时间（精确到秒），移出后清除，再次完成重新记录
-- 完成卡片归档：看板右键归档，或通过已完成列右上角“一键归档”归档当前项目全部已完成卡片；待办和进行中不能归档
-- 归档入口：项目“归档”标签页查看当前项目，侧栏“归档”查看所有项目；每行四张，支持搜索、优先级/标签筛选及排序
-- 归档卡片只读：可展开查看步骤、保留完成时间；不可拖动或编辑，右键仅可删除，删除前确认
-- 待办管理：分类、任务和具体步骤三级管理
-- 任务优先级：低、中、高优先级标记
-- 任务进度：根据具体步骤自动计算完成进度
-- 统计分析：番茄数量、专注时长、完成率和累计数据
-- 最近 7 天图表：番茄数量和专注时间柱状图
-- 贡献热力图：查看长期专注记录
-- 个性化设置：专注时长、休息时长、音效、界面边距和字体大小
-- 卡片文字随字号设置即时变化，包括标题、备注、标签和展开的具体步骤
-- 本地数据：SQLite 存储，无需网络和云端服务
-- 浅色 / 深色主题：在设置中选择主题并保存，立即生效，重启后保留
+- 番茄钟倒计时、短休息、长休息与正计时，按项目保存记录。
+- 多项目创建、重命名、删除；查看项目统计、最近七天图表和贡献热力图。
+- 待办、进行中、已完成三列看板，拖动卡片修改状态。
+- 点击卡片或按 Enter/空格展开步骤，右上角 `edit` 编辑标题、备注、分类、标签、优先级和步骤。
+- 进入已完成时记录日期与时间，移出后清除，再次完成重新记录。
+- 当前项目或全部项目搜索，优先级/标签筛选，按优先级、标题和时间排序。
+- 已完成卡片可右键归档，或通过 Done 列“一键归档”归档当前项目全部已完成卡片，不受筛选影响。
+- 项目“归档”查看当前项目，侧栏“归档”查看全部项目；每行四张，支持搜索、筛选和排序。
+- 归档保留卡片及步骤和完成时间，可展开查看，只允许删除，删除前确认。
+- 设置中切换浅色/深色主题、字号、边距、专注时长与音效，保存后生效。
 
-## 环境要求
+版本记录见 [CHANGELOG](docs/CHANGELOG.md)，后续需求见 [TODO](docs/TODO.md)。
+原始界面调研保留在 [设计记录](docs/research/2026-10-28-productivity-kanban-references.md)。
 
-- Python 3.12+
-- Windows（当前版本主要面向 Windows 桌面环境）
+## 源码运行
 
-## 安装与运行
+建议使用 Python 3.12。运行依赖固定为本次验证的版本。
 
 ```powershell
 python -m venv .venv
-.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-python main.py
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe main.py
 ```
 
-首次运行会自动创建 `pomodoro_data.db` 数据库和默认项目。
+源码模式的数据保存在项目根目录，打包版的数据保存在 exe 所在目录。
 
-## 测试
+## 开发与测试
 
 ```powershell
-python -m unittest discover -v
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m unittest discover -v
 ```
 
-首次使用新版会自动升级原有 SQLite 表。旧任务没有可靠完成时间时保持为空；不会把升级时间填作完成时间。现有番茄钟与正计时仍按项目记录，不关联具体任务。
+测试使用临时数据库，界面测试使用 Qt offscreen 模式。
 
-看板主题预览：[浅色](docs/previews/kanban-expanded-light.png) · [深色](docs/previews/kanban-expanded-dark.png)。预览使用临时示例数据，不写入实际数据库。
+## 重新构建
 
-归档页面预览：[浅色](docs/previews/archive-light.png) · [深色](docs/previews/archive-dark.png)。归档会自动从看板和待办移出卡片，保留原项目、分类、备注、步骤、标签及完成时间。归档页不提供恢复操作。
-
-## 打包
-
-项目提供了 PyInstaller 配置，可以运行：
-
-```powershell
-build.bat
-```
-
-生成的桌面程序位于 `dist/` 目录。
-
-双击 `dist/PomodoroTimer.exe` 即可运行，无需安装 Python。`build.bat` 优先使用项目的 `.venv`，也可以在项目目录执行：
+运行 `build.bat`，或执行：
 
 ```powershell
 .\.venv\Scripts\python.exe -m PyInstaller --clean --noconfirm PomodoroTimer.spec
 ```
 
-打包版的数据文件保存在 exe 同目录。要沿用已有数据，请在首次打开 exe 前将原来的 `pomodoro_data.db` 复制到该目录。
+生成 `dist/PomodoroTimer-v1.0.exe`。`app_info.py` 是版本信息的统一来源，程序标题、exe 文件名和 Windows 文件属性随其更新。`build/` 为可删除的打包中间目录，`.venv/` 为本地开发环境，二者不纳入 Git。
 
 ## 项目结构
 
-| 文件 | 说明 |
+| 文件或目录 | 职责 |
 | --- | --- |
 | `main.py` | 程序入口 |
-| `database.py` | SQLite 数据层和 CRUD 操作 |
-| `timer_logic.py` | 番茄钟核心逻辑 |
-| `ui_main.py` | 主窗口和全局导航 |
-| `ui_board.py` | 项目看板 |
-| `ui_archive.py` | 项目与全局归档、四列只读网格 |
-| `ui_card_dialog.py` | 看板和待办共用的任务详情编辑器 |
-| `ui_theme.py` | 浅色和深色主题 |
-| `ui_todo.py` | 待办与步骤管理 |
-| `ui_timer.py` | 计时界面 |
-| `ui_stats.py` | 统计界面 |
-| `ui_settings.py` | 设置界面 |
+| `app_info.py` | 名称和版本 |
+| `database.py` | SQLite 数据、兼容升级及增删改查 |
+| `timer_logic.py`、`sound.py` | 计时逻辑与音效 |
+| `ui_main.py`、`ui_sidebar.py`、`ui_workspace.py` | 主窗口、导航和项目工作区 |
+| `ui_card.py`、`ui_card_dialog.py` | 看板/归档共用卡片及详情编辑器 |
+| `ui_board.py`、`ui_archive.py`、`ui_todo.py` | 看板、归档及待办页面 |
+| `ui_timer.py`、`ui_stats.py`、`heatmap.py` | 计时、统计及热力图 |
+| `ui_settings.py`、`ui_theme.py` | 设置及主题 |
+| `tests/` | 数据、计时、归档及界面回归测试 |
+| `docs/` | 版本记录、后续需求及设计记录 |
+| `PomodoroTimer.spec`、`build.bat` | Windows 打包配置与入口 |
 
 ## 许可证
 

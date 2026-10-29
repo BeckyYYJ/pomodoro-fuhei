@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
 )
 
 import database
-from ui_board import CardFrame, delete_card_with_confirmation
+from ui_card import CardFrame, delete_card_with_confirmation
 
 
 class ArchiveWidget(QWidget):

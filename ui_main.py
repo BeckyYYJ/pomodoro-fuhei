@@ -11,6 +11,7 @@ from PySide6.QtGui import QFont
 
 import database
 import sound
+from app_info import APP_NAME, APP_VERSION, WINDOW_TITLE
 from timer_logic import PomodoroTimer
 from ui_settings import SettingsWidget
 from ui_sidebar import SidebarWidget
@@ -18,18 +19,15 @@ from ui_stats import StatsWidget
 from ui_timer import TimerWidget
 from ui_workspace import ProjectWorkspace
 from ui_archive import ArchiveWidget
-from ui_theme import apply_theme, stylesheet
+from ui_theme import apply_theme
 
 FUNCTION_INDEX = {"timer": 0, "stats": 1, "settings": 2, "archive": 4}
-WORKSPACE_INDEX = 3
-
-THEME_STYLE = stylesheet("dark")
 
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("番茄钟")
+        self.setWindowTitle(WINDOW_TITLE)
         self.resize(1180, 760)
         self.setMinimumSize(950, 620)
         self._pending_record_id = None
@@ -195,7 +193,8 @@ class MainWindow(QMainWindow):
 def main():
     database.init_db()
     app = QApplication([])
-    app.setApplicationName("番茄钟")
+    app.setApplicationName(APP_NAME)
+    app.setApplicationVersion(APP_VERSION)
     app.setFont(QFont("Microsoft YaHei UI", 14))
     app.setStyle("Fusion")
     apply_theme(app, database.get_settings().get("ui_theme", "dark"))

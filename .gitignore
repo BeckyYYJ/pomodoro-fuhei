@@ -9,5 +9,6 @@ dist/
 *.sqlite
 *.sqlite3
 .pytest_cache/
+.ruff_cache/
 .idea/
 .vscode/

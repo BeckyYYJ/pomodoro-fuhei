@@ -11,5 +11,5 @@ if errorlevel 1 (
     exit /b 1
 )
 echo.
-echo Done. Exe is in %CD%\dist\PomodoroTimer.exe
+echo Done. Versioned exe is in %CD%\dist
 pause

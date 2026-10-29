@@ -1,4 +1,4 @@
-"""Run with .venv/Scripts/python.exe -m unittest test_ui -v."""
+"""Run with .venv/Scripts/python.exe -m unittest discover -s tests -v."""
 import gc
 import os
 import tempfile
@@ -14,10 +14,11 @@ from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QMessageBox
 
 import database
-from ui_board import BoardWidget, CardFrame, CARD_MIME
+from ui_board import BoardWidget
+from ui_card import CardFrame, CARD_MIME
 from ui_card_dialog import CardDialog
 from ui_main import MainWindow
-from ui_theme import apply_theme, palette_for
+from ui_theme import palette_for
 
 APP = QApplication.instance() or QApplication([])
 APP.setStyle("Fusion")
@@ -54,6 +55,10 @@ class KanbanUITests(unittest.TestCase):
 
     def card(self):
         return next(c for c in database.list_cards(self.pid) if c["id"] == self.card_id)
+
+    def test_release_version_is_visible_in_window_title(self):
+        window = MainWindow()
+        self.assertEqual(window.windowTitle(), "番茄钟 v1.0")
 
     def test_real_drop_event_records_and_clears_time(self):
         mime = QMimeData()
@@ -137,7 +142,7 @@ class KanbanUITests(unittest.TestCase):
         frame = CardFrame(self.card())
         frame.resize(350, 250)
         frame.show()
-        with patch("ui_board.QDrag") as drag:
+        with patch("ui_card.QDrag") as drag:
             QTest.mousePress(frame, Qt.LeftButton, pos=frame.rect().center())
             QTest.mouseMove(frame, frame.rect().center() + frame.rect().topRight() / 3)
             QTest.mouseRelease(frame, Qt.LeftButton, pos=frame.rect().center())
@@ -307,7 +312,7 @@ class KanbanUITests(unittest.TestCase):
         self.assertFalse(frame.acceptDrops())
         self.assertFalse(frame._edit_button.isVisible())
         database.add_item(self.card_id, "其他活动卡片步骤")
-        with patch("ui_board.QDrag") as drag:
+        with patch("ui_card.QDrag") as drag:
             QTest.mousePress(frame, Qt.LeftButton, pos=frame.rect().center())
             QTest.mouseMove(frame, frame.rect().center() + QPointF(60, 0).toPoint())
             QTest.mouseRelease(frame, Qt.LeftButton)
