@@ -68,7 +68,7 @@ class CardFrame(QFrame):
         category.setWordWrap(True)
         header = QHBoxLayout()
         header.addWidget(category, 1)
-        self._edit_button = QPushButton("edit")
+        self._edit_button = QPushButton("edit", self)
         self._edit_button.setProperty("role", "cardEdit")
         self._edit_button.setAccessibleName(f"编辑任务 {card['title']}")
         self._edit_button.clicked.connect(lambda: self.opened.emit(self._card_id))

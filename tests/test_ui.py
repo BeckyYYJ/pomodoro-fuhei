@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import QEvent, QMimeData, QPointF, Qt
+from PySide6.QtCore import QEvent, QMimeData, QObject, QPointF, Qt
 from PySide6.QtGui import QDragEnterEvent, QDropEvent, QFontDatabase, QFontMetrics, QPalette
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QMessageBox
@@ -59,6 +59,46 @@ class KanbanUITests(unittest.TestCase):
     def test_release_version_is_visible_in_window_title(self):
         window = MainWindow()
         self.assertEqual(window.windowTitle(), "番茄钟 v1.0")
+
+    def test_switch_from_empty_to_populated_project_never_shows_child_controls_as_windows(self):
+        empty_pid = database.create_project("空项目")
+        for index in range(6):
+            database.add_card(self.sid, f"已有任务 {index}", status=index % 3)
+        archived = database.add_card(self.sid, "归档记录", status=database.STATUS_DONE)
+        database.archive_card(archived)
+        window = MainWindow()
+        window.show()
+        window.sidebar.select_project(empty_pid)
+        APP.processEvents()
+
+        class WindowShowRecorder(QObject):
+            def __init__(self):
+                super().__init__()
+                self.shown = []
+
+            def eventFilter(self, watched, event):
+                if event.type() == QEvent.Show and watched.isWidgetType() and watched.isWindow():
+                    self.shown.append((type(watched).__name__, watched.windowTitle()))
+                return False
+
+        recorder = WindowShowRecorder()
+        APP.installEventFilter(recorder)
+        try:
+            nav = window.sidebar.project_list
+            for _ in range(3):
+                for pid in (self.pid, empty_pid):
+                    row = next(i for i in range(nav.count()) if nav.item(i).data(Qt.UserRole) == pid)
+                    QTest.mouseClick(nav.viewport(), Qt.LeftButton,
+                                     pos=nav.visualItemRect(nav.item(row)).center())
+                    APP.processEvents()
+                    self.assertEqual(window.workspace._project_id, pid)
+            window.sidebar.select_project(self.pid)
+            window.workspace.tabs.setCurrentWidget(window.workspace.archive)
+            APP.processEvents()
+            self.assertEqual(window.workspace.archive._grid.count(), 1)
+            self.assertEqual(recorder.shown, [], "Navigation must not briefly show parentless child controls")
+        finally:
+            APP.removeEventFilter(recorder)
 
     def test_real_drop_event_records_and_clears_time(self):
         mime = QMimeData()
